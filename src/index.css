@@ -1,0 +1,191 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  /* Deep environmental navy scale */
+  --color-night-950: #050b13;
+  --color-night-900: #081221;
+  --color-night-850: #0b1622;
+  --color-night-800: #0d1b2a;
+  --color-night-750: #102133;
+  --color-night-700: #13273c;
+  --color-night-600: #19334d;
+  --color-night-500: #21405e;
+
+  --color-mist-300: #a7c4d8;
+  --color-mist-400: #7fa5bf;
+  --color-mist-500: #5d86a3;
+
+  --shadow-glow-emerald: 0 0 40px -8px rgba(16, 185, 129, 0.35);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: #0d1b2a;
+  color: #dbe7ef;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: rgba(16, 185, 129, 0.32);
+  color: #ffffff;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.22) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.32);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@layer components {
+  /* Floating glass panel — the core surface of EFIF */
+  .glass {
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.055) 0%, rgba(255, 255, 255, 0.018) 48%, rgba(148, 197, 255, 0.035) 100%);
+    border: 1px solid rgba(163, 200, 255, 0.09);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow:
+      0 12px 38px -14px rgba(2, 8, 18, 0.7),
+      inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  }
+
+  .glass-strong {
+    background: linear-gradient(165deg, rgba(16, 33, 52, 0.92) 0%, rgba(11, 22, 36, 0.94) 100%);
+    border: 1px solid rgba(163, 200, 255, 0.12);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    box-shadow:
+      0 24px 70px -20px rgba(2, 8, 18, 0.85),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
+
+  .glass-input {
+    background: rgba(5, 12, 22, 0.55);
+    border: 1px solid rgba(163, 200, 255, 0.12);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  }
+  .glass-input:hover {
+    border-color: rgba(163, 200, 255, 0.2);
+  }
+  .glass-input:focus-within {
+    border-color: rgba(52, 211, 153, 0.55);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14);
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: 999px;
+    padding: 0.25rem 0.625rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border: 1px solid rgba(163, 200, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    color: #b8cbd9;
+    white-space: nowrap;
+  }
+
+  .section-title {
+    font-family: var(--font-display);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.045em;
+    color: #e6eef5;
+  }
+}
+
+@layer utilities {
+  .text-gradient-emerald {
+    background: linear-gradient(120deg, #6ee7b7 0%, #34d399 45%, #22d3ee 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .animate-ping-slow {
+    animation: ping-slow 2.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  .animate-float-slow {
+    animation: float-slow 16s ease-in-out infinite;
+  }
+
+  .animate-float-slower {
+    animation: float-slow 22s ease-in-out infinite reverse;
+  }
+
+  .animate-shimmer {
+    background-size: 220% 100%;
+    animation: shimmer 1.8s linear infinite;
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.4s ease both;
+  }
+}
+
+@keyframes ping-slow {
+  0% {
+    transform: scale(1);
+    opacity: 0.65;
+  }
+  75%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(34px, -26px) scale(1.06);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
