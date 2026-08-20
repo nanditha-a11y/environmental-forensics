@@ -208,7 +208,8 @@ src/
 
  ## Screenshots
 
- Screenshots can be added here. Suggested captures include the login screen, command dashboard, incident map, and evidence detail modal.
+ ![alt text](image.png) login page
+ <video controls src="demo.mp4" title="Title"></video>
 
  ## Current Limitations
 
@@ -230,6 +231,3 @@ src/
  - Build the currently placeholder modules and add automated tests for core workflows.
  - Split large production bundles with route-level code splitting.
 
- ## Authors / Contributors
-
- No contributor metadata is available in the current workspace. Add project authors or contributors here when repository information is available.
