@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     host: true,
-    port: 5173,
+    port: 3000,
     allowedHosts: ['call-convert-sensor-honest.trycloudflare.com'],
   },
 });
