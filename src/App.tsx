@@ -2,12 +2,21 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Page } from './components/ui/Page';
 import { useAuth } from './context/AuthContext';
-import { placeholderModules } from './data/mock';
 import { Icon } from './components/ui/Icon';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Placeholder from './pages/Placeholder';
 import Register from './pages/Register';
+
+// Static route definitions replacing placeholderModules mock array
+const MODULE_ROUTES = [
+  { path: '/incidents', key: 'incidents' },
+  { path: '/spatial', key: 'spatial' },
+  { path: '/evidence', key: 'evidence' },
+  { path: '/alerts', key: 'alerts' },
+  { path: '/reports', key: 'reports' },
+  { path: '/settings', key: 'settings' },
+];
 
 function AuthSplash() {
   return (
@@ -52,7 +61,7 @@ function AnimatedRoutes() {
           }
         />
 
-        {placeholderModules.map((mod) => (
+        {MODULE_ROUTES.map((mod) => (
           <Route
             key={mod.path}
             path={mod.path}

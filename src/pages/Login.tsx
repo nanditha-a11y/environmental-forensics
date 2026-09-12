@@ -1,12 +1,11 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { CircleCheck, Eye, EyeOff, Loader2, Lock, Mail, ShieldAlert, Sparkles } from 'lucide-react';
+import { CircleCheck, Eye, EyeOff, Loader2, Lock, Mail, ShieldAlert } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthShell } from '../components/auth/AuthShell';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { DEMO_ACCOUNT } from '../lib/auth';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -51,13 +50,6 @@ export default function Login() {
       setError(result.error ?? 'Sign in failed.');
       setShakeKey((k) => k + 1);
     }
-  };
-
-  const fillDemo = () => {
-    setEmail(DEMO_ACCOUNT.email);
-    setPassword(DEMO_ACCOUNT.password);
-    setFieldErrors({});
-    setError(null);
   };
 
   const inputClass = (hasError: boolean) =>
@@ -181,24 +173,6 @@ export default function Login() {
             )}
           </Button>
         </form>
-
-        {/* Demo account hint */}
-        <div className="mt-5 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.06] p-3.5">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-3.5 w-3.5 text-emerald-300" />
-            <p className="text-[11px] font-bold tracking-[0.08em] text-emerald-300 uppercase">Demo account</p>
-          </div>
-          <p className="mt-1.5 font-mono text-[11.5px] leading-relaxed text-slate-300">
-            demo@efif.com <span className="text-slate-500">/</span> demo123
-          </p>
-          <button
-            type="button"
-            onClick={fillDemo}
-            className="mt-2 text-[11.5px] font-semibold text-emerald-300 transition-colors hover:text-emerald-200"
-          >
-            Fill demo credentials →
-          </button>
-        </div>
 
         <p className="mt-6 text-center text-[13px] text-slate-400">
           New to EFIF?{' '}

@@ -17,7 +17,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [initializing, setInitializing] = useState(true);
 
   useEffect(() => {
-    // Restore a simulated session on load.
     setUser(authService.getSession());
     setInitializing(false);
   }, []);
@@ -25,7 +24,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(async (email: string, password: string) => {
     const result = await authService.authenticate(email, password);
     if (result.ok) {
-      authService.saveSession(result.user);
       setUser(result.user);
       return { ok: true };
     }
@@ -34,12 +32,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = useCallback(async (input: SignUpInput) => {
     const result = await authService.createAccount(input);
-    if (result.ok) return { ok: true };
+    if (result.ok) {
+      if (result.user) {
+        setUser(result.user);
+      }
+      return { ok: true };
+    }
     return { ok: false, error: result.error };
   }, []);
 
   const signOut = useCallback(() => {
-    authService.saveSession(null);
+    authService.logout();
     setUser(null);
   }, []);
 

@@ -4,7 +4,50 @@ import { useNavigate } from 'react-router-dom';
 import { Shell } from '../components/layout/Shell';
 import { Button } from '../components/ui/Button';
 import { Icon } from '../components/ui/Icon';
-import { placeholderModules } from '../data/mock';
+
+export interface PlaceholderModule {
+  key: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  icon: string;
+  chips: string[];
+}
+
+export const placeholderModules: PlaceholderModule[] = [
+  {
+    key: 'analytics',
+    title: 'Advanced Analytics',
+    subtitle: 'Predictive modeling & trend synthesis',
+    description: 'Longitudinal analysis, machine learning anomaly predictions, and water basin flow vectors.',
+    icon: 'bar-chart-3',
+    chips: ['Predictive AI', 'Flow Models', 'Trend Synthesis'],
+  },
+  {
+    key: 'reports',
+    title: 'Compliance Reports',
+    subtitle: 'Automated legal evidence generation',
+    description: 'One-click regulatory reporting with signed chain-of-custody hashes for environmental enforcement.',
+    icon: 'file-text',
+    chips: ['Court Ready', 'Automated Export', 'Chain-of-Custody'],
+  },
+  {
+    key: 'sensors',
+    title: 'Sensor Network',
+    subtitle: 'IoT telemetry & sensor health',
+    description: 'Real-time telemetry feeds, calibration logs, and battery diagnostics for all field sensors.',
+    icon: 'activity',
+    chips: ['IoT Telemetry', 'Node Health', 'Calibration Logs'],
+  },
+  {
+    key: 'settings',
+    title: 'System Settings',
+    subtitle: 'Agency permissions & API configuration',
+    description: 'Manage agency access controls, API keys, webhook triggers, and platform integrations.',
+    icon: 'settings',
+    chips: ['Access Control', 'API Keys', 'Webhooks'],
+  },
+];
 
 export default function Placeholder({ moduleKey }: { moduleKey: string }) {
   const navigate = useNavigate();

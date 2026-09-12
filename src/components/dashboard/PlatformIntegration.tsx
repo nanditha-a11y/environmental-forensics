@@ -1,9 +1,15 @@
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { integrations } from '../../data/mock';
 import type { Integration } from '../../types';
 import { GlassCard } from '../ui/GlassCard';
 import { Icon } from '../ui/Icon';
+
+const INTEGRATIONS: Integration[] = [
+  { id: '1', name: 'GIS Mapping', icon: 'map', status: 'Active' },
+  { id: '2', name: 'IoT Sensors', icon: 'cpu', status: 'Active' },
+  { id: '3', name: 'Satellite Feeds', icon: 'globe', status: 'Active' },
+  { id: '4', name: 'Lab Analytics', icon: 'flask', status: 'Connected' },
+];
 
 function IntegrationTile({ item, index }: { item: Integration; index: number }) {
   const active = item.status === 'Active';
@@ -40,7 +46,7 @@ export function PlatformIntegration() {
       </div>
 
       <div className="flex-1 grid grid-cols-2 gap-2 p-3">
-        {integrations.map((item, i) => (
+        {INTEGRATIONS.map((item, i) => (
           <IntegrationTile key={item.id} item={item} index={i} />
         ))}
       </div>

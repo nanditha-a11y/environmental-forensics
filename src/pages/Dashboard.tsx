@@ -8,7 +8,55 @@ import { KpiCard } from '../components/dashboard/KpiCard';
 import { PlatformIntegration } from '../components/dashboard/PlatformIntegration';
 import { RecentAlerts } from '../components/dashboard/RecentAlerts';
 import { Shell } from '../components/layout/Shell';
-import { kpis } from '../data/mock';
+import type { Kpi } from '../types';
+
+export const kpis: Kpi[] = [
+  {
+    id: 'kpi-1',
+    label: 'ACTIVE INCIDENTS',
+    value: 14,
+    delta: '+2',
+    icon: 'triangle-alert',
+    accent: 'amber',
+    spark: [12, 11, 13, 12, 14, 13, 14],
+  },
+  {
+    id: 'kpi-2',
+    label: 'CRITICAL ALERTS',
+    value: 3,
+    delta: '+1',
+    icon: 'bell',
+    accent: 'amber',
+    spark: [1, 2, 2, 1, 3, 2, 3],
+  },
+  {
+    id: 'kpi-3',
+    label: 'SAMPLES COLLECTED',
+    value: 184,
+    delta: '+28',
+    icon: 'flask',
+    accent: 'cyan',
+    spark: [140, 150, 155, 162, 170, 178, 184],
+  },
+  {
+    id: 'kpi-4',
+    label: 'ANOMALY CONFIDENCE',
+    value: 94.2,
+    delta: '+1.4%',
+    icon: 'brain',
+    accent: 'emerald',
+    spark: [88, 90, 91, 92, 93, 93.5, 94.2],
+  },
+  {
+    id: 'kpi-5',
+    label: 'COMPLIANCE SCORE',
+    value: 68,
+    delta: '-4%',
+    icon: 'shield',
+    accent: 'violet',
+    spark: [76, 75, 73, 72, 70, 69, 68],
+  },
+];
 
 function LiveClock() {
   const [now, setNow] = useState(new Date());

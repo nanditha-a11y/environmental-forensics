@@ -1,11 +1,19 @@
-import { sdgGoals } from '../../data/mock';
 import { Icon } from '../ui/Icon';
+
+const SDG_GOALS = [
+  { number: 6, name: 'Clean Water & Sanitation', icon: 'droplets' },
+  { number: 13, name: 'Climate Action', icon: 'globe' },
+  { number: 14, name: 'Life Below Water', icon: 'waves' },
+  { number: 15, name: 'Life on Land', icon: 'trees' },
+  { number: 16, name: 'Peace, Justice & Strong Institutions', icon: 'shield' },
+  { number: 17, name: 'Partnerships for the Goals', icon: 'link' },
+];
 
 export function SdgPanel() {
   return (
     <div className="glass rounded-xl p-3">
       <div className="grid grid-cols-3 gap-1.5">
-        {sdgGoals.map((goal) => (
+        {SDG_GOALS.map((goal) => (
           <div
             key={goal.number}
             title={`SDG ${goal.number} — ${goal.name}`}

@@ -2,7 +2,8 @@ import express, { Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { pool } from './db';
-import { hashPassword, comparePassword, generateToken } from './utils/auth';
+import authRoutes from './routes/authRoutes';
+import evidenceRoutes from './routes/evidenceRoutes';
 import { authenticateJWT, authorizeRoles, AuthenticatedRequest } from './middleware/authMiddleware';
 
 dotenv.config();
@@ -14,84 +15,10 @@ app.use(cors());
 app.use(express.json());
 
 // -----------------------------------------------------------------------------
-// AUTHENTICATION ROUTES
+// AUTHENTICATION & EVIDENCE ROUTES (MODULAR)
 // -----------------------------------------------------------------------------
-
-app.post('/api/auth/register', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const { full_name, email, password, role } = req.body;
-
-  if (!full_name || !email || !password) {
-    res.status(400).json({ status: 'error', message: 'Full name, email, and password are required.' });
-    return;
-  }
-
-  try {
-    const hashedPassword = await hashPassword(password);
-    const assignedRole = role || 'investigator';
-
-    const query = `
-      INSERT INTO users (full_name, email, password_hash, role)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id, full_name, email, role, created_at;
-    `;
-
-    const result = await pool.query(query, [full_name, email, hashedPassword, assignedRole]);
-    const user = result.rows[0];
-
-    const token = generateToken({ id: user.id, email: user.email, role: user.role });
-
-    res.status(201).json({ status: 'success', token, user });
-  } catch (error: any) {
-    if (error.code === '23505') {
-      res.status(400).json({ status: 'error', message: 'Email already exists.' });
-      return;
-    }
-    res.status(500).json({ status: 'error', message: error.message });
-  }
-});
-
-app.post('/api/auth/login', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    res.status(400).json({ status: 'error', message: 'Email and password are required.' });
-    return;
-  }
-
-  try {
-    const query = `SELECT * FROM users WHERE email = $1;`;
-    const result = await pool.query(query, [email]);
-
-    if (result.rows.length === 0) {
-      res.status(401).json({ status: 'error', message: 'Invalid email or password.' });
-      return;
-    }
-
-    const user = result.rows[0];
-    const isPasswordValid = await comparePassword(password, user.password_hash);
-
-    if (!isPasswordValid) {
-      res.status(401).json({ status: 'error', message: 'Invalid email or password.' });
-      return;
-    }
-
-    const token = generateToken({ id: user.id, email: user.email, role: user.role });
-
-    res.json({
-      status: 'success',
-      token,
-      user: {
-        id: user.id,
-        full_name: user.full_name,
-        email: user.email,
-        role: user.role,
-        created_at: user.created_at,
-      },
-    });
-  } catch (error: any) {
-    res.status(500).json({ status: 'error', message: error.message });
-  }
-});
+app.use('/api/auth', authRoutes);
+app.use('/api/evidence', evidenceRoutes);
 
 // -----------------------------------------------------------------------------
 // CORE & SPATIAL API ROUTES
@@ -193,10 +120,9 @@ app.post('/api/samples', authenticateJWT, authorizeRoles('admin', 'investigator'
 });
 
 // -----------------------------------------------------------------------------
-// WEEK 3: INCIDENTS CRUD & SPATIAL RADIUS ROUTES
+// INCIDENTS CRUD & SPATIAL RADIUS ROUTES
 // -----------------------------------------------------------------------------
 
-// GET all incidents (GeoJSON output with point location & polygon affected area)
 app.get('/api/incidents', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const query = `
@@ -232,7 +158,6 @@ app.get('/api/incidents', async (req: AuthenticatedRequest, res: Response): Prom
   }
 });
 
-// GET /api/incidents/radius - Find incidents within a radius (meters) of lat/lng
 app.get('/api/incidents/radius', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { lng, lat, radiusMeters = 5000 } = req.query;
 
@@ -260,7 +185,6 @@ app.get('/api/incidents/radius', async (req: AuthenticatedRequest, res: Response
   }
 });
 
-// POST new incident with Point & optional Polygon geometry (JWT Protected: Admin / Investigator)
 app.post('/api/incidents', authenticateJWT, authorizeRoles('admin', 'investigator'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { title, severity, status, polygon_coordinates, latitude, longitude } = req.body;
   const created_by = req.user?.id;
@@ -298,7 +222,6 @@ app.post('/api/incidents', authenticateJWT, authorizeRoles('admin', 'investigato
   }
 });
 
-// PATCH update incident status / severity (JWT Protected: Admin / Investigator)
 app.patch('/api/incidents/:id', authenticateJWT, authorizeRoles('admin', 'investigator'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id } = req.params;
   const { severity, status } = req.body;

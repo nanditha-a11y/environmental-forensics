@@ -5,13 +5,30 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useSearch } from '../../context/SearchContext';
 import { useToast } from '../../context/ToastContext';
-import { alerts, evidenceItems, notifications } from '../../data/mock';
+import { useAlerts } from '../../hooks/useAlerts';
+import { useEvidence } from '../../hooks/useEvidence';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { Icon } from '../ui/Icon';
 
 interface TopBarProps {
   onToggleSidebar: () => void;
   onOpenMobileSidebar: () => void;
+}
+
+interface AlertItem {
+  id: string | number;
+  title: string;
+  source?: string;
+  severity: string;
+  time?: string;
+}
+
+interface EvidenceItem {
+  id: string | number;
+  title: string;
+  metaValue?: string;
+  status: string;
+  kind?: string;
 }
 
 function initials(name: string) {
@@ -31,7 +48,6 @@ export function TopBar({ onToggleSidebar, onOpenMobileSidebar }: TopBarProps) {
 
   const [bellOpen, setBellOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [notifs, setNotifs] = useState(notifications);
 
   const bellRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -43,15 +59,26 @@ export function TopBar({ onToggleSidebar, onOpenMobileSidebar }: TopBarProps) {
 
   const [queryFocused, setQueryFocused] = useState(false);
 
-  const unreadCount = notifs.filter((n) => n.unread).length;
+  // Live Data Hooks
+  const { data: rawAlerts = [] } = useAlerts();
+  const { data: rawEvidence = [] } = useEvidence();
+
+  const alerts = rawAlerts as AlertItem[];
+  const evidenceItems = rawEvidence as EvidenceItem[];
+
+  const unreadCount = alerts.length;
 
   const searchResults = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (q.length === 0) return { evidence: [], alerts: [] as typeof alerts, total: 0 };
-    const ev = evidenceItems.filter((e) => `${e.title} ${e.metaValue} ${e.status}`.toLowerCase().includes(q));
-    const al = alerts.filter((a) => `${a.title} ${a.source}`.toLowerCase().includes(q));
+    if (q.length === 0) return { evidence: [], alerts: [], total: 0 };
+    const ev = evidenceItems.filter((e: EvidenceItem) =>
+      `${e.title} ${e.metaValue ?? ''} ${e.status}`.toLowerCase().includes(q)
+    );
+    const al = alerts.filter((a: AlertItem) =>
+      `${a.title} ${a.source ?? ''}`.toLowerCase().includes(q)
+    );
     return { evidence: ev, alerts: al, total: ev.length + al.length };
-  }, [query]);
+  }, [query, evidenceItems, alerts]);
 
   const jumpTo = (sectionId: string) => {
     document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -137,13 +164,13 @@ export function TopBar({ onToggleSidebar, onOpenMobileSidebar }: TopBarProps) {
                 {searchResults.evidence.length > 0 && (
                   <>
                     <p className="px-3 pt-2 pb-1 text-[10px] font-bold tracking-[0.12em] text-slate-500 uppercase">Evidence</p>
-                    {searchResults.evidence.map((e) => (
+                    {searchResults.evidence.map((e: EvidenceItem) => (
                       <button
                         key={e.id}
                         onClick={() => jumpTo('evidence-summary')}
                         className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/[0.07]"
                       >
-                        <Icon name={e.kind} className="h-4 w-4 shrink-0 text-emerald-300" />
+                        <Icon name={e.kind || 'file'} className="h-4 w-4 shrink-0 text-emerald-300" />
                         <span className="min-w-0 flex-1 truncate text-[13px] text-slate-200">{e.title}</span>
                         <span className="chip !normal-case !text-[10px]">{e.status}</span>
                       </button>
@@ -154,7 +181,7 @@ export function TopBar({ onToggleSidebar, onOpenMobileSidebar }: TopBarProps) {
                 {searchResults.alerts.length > 0 && (
                   <>
                     <p className="px-3 pt-2 pb-1 text-[10px] font-bold tracking-[0.12em] text-slate-500 uppercase">Alerts</p>
-                    {searchResults.alerts.map((a) => (
+                    {searchResults.alerts.map((a: AlertItem) => (
                       <button
                         key={a.id}
                         onClick={() => jumpTo('recent-alerts')}
@@ -215,35 +242,37 @@ export function TopBar({ onToggleSidebar, onOpenMobileSidebar }: TopBarProps) {
                 <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
                   <p className="text-[13px] font-semibold text-white">Notifications</p>
                   <button
-                    onClick={() => setNotifs((prev) => prev.map((n) => ({ ...n, unread: false })))}
+                    onClick={() => push('All notifications marked as read.', 'info')}
                     className="text-[11px] font-medium text-emerald-300 transition-colors hover:text-emerald-200"
                   >
                     Mark all as read
                   </button>
                 </div>
                 <div className="max-h-[300px] overflow-y-auto">
-                  {notifs.map((n) => (
-                    <button
-                      key={n.id}
-                      onClick={() => setNotifs((prev) => prev.map((x) => (x.id === n.id ? { ...x, unread: false } : x)))}
-                      className="flex w-full items-start gap-3 border-b border-white/5 px-4 py-3 text-left transition-colors last:border-0 hover:bg-white/[0.05]"
-                    >
-                      <span
-                        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${
-                          n.severity === 'high'
-                            ? 'border-red-400/25 bg-red-400/10 text-red-300'
-                            : 'border-amber-400/25 bg-amber-400/10 text-amber-300'
-                        }`}
+                  {alerts.length === 0 ? (
+                    <p className="p-4 text-center text-xs text-slate-400">No active alerts.</p>
+                  ) : (
+                    alerts.map((n: AlertItem) => (
+                      <div
+                        key={n.id}
+                        className="flex w-full items-start gap-3 border-b border-white/5 px-4 py-3 text-left transition-colors last:border-0 hover:bg-white/[0.05]"
                       >
-                        <Icon name="alert" className="h-3.5 w-3.5" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[12.5px] leading-snug text-slate-200">{n.title}</span>
-                        <span className="mt-0.5 block text-[10.5px] text-slate-500">{n.time}</span>
-                      </span>
-                      {n.unread && <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />}
-                    </button>
-                  ))}
+                        <span
+                          className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${
+                            n.severity === 'high'
+                              ? 'border-red-400/25 bg-red-400/10 text-red-300'
+                              : 'border-amber-400/25 bg-amber-400/10 text-amber-300'
+                          }`}
+                        >
+                          <Icon name="alert" className="h-3.5 w-3.5" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[12.5px] leading-snug text-slate-200">{n.title}</span>
+                          <span className="mt-0.5 block text-[10.5px] text-slate-500">{n.time}</span>
+                        </span>
+                      </div>
+                    ))
+                  )}
                 </div>
                 <button
                   onClick={() => {

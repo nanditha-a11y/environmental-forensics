@@ -1,12 +1,16 @@
 import { motion } from 'framer-motion';
 import { BrainCircuit } from 'lucide-react';
-import { riskContributors } from '../../data/mock';
+import type { RiskContributor } from '../../types';
 import { AnimatedNumber } from '../ui/AnimatedNumber';
 import { ProgressBar } from '../ui/ProgressBar';
 
-export function AiRiskGauge() {
-  const score = 87;
-  const fraction = score / 100;
+interface AiRiskGaugeProps {
+  score?: number;
+  riskLabel?: string;
+}
+
+export function AiRiskGauge({ score = 0, riskLabel = 'NORMAL' }: AiRiskGaugeProps) {
+  const fraction = Math.min(Math.max(score / 100, 0), 1);
 
   return (
     <div className="flex flex-col items-center">
@@ -40,22 +44,34 @@ export function AiRiskGauge() {
             <span className="text-[12px] font-semibold text-slate-500">/100</span>
           </div>
           <span className="mt-1.5 rounded-full border border-red-400/40 bg-red-400/15 px-2.5 py-0.5 text-[10px] font-bold tracking-[0.14em] text-red-300">
-            HIGH
+            {riskLabel}
           </span>
         </div>
       </div>
       <div className="mt-2.5 flex items-center gap-1.5 text-[10px] text-slate-500">
         <BrainCircuit className="h-3 w-3" />
-        Simulated AI composite · prototype
+        Live Telemetry Score
       </div>
     </div>
   );
 }
 
-export function RiskContributors() {
+interface RiskContributorsProps {
+  contributors?: RiskContributor[];
+}
+
+export function RiskContributors({ contributors = [] }: RiskContributorsProps) {
+  if (contributors.length === 0) {
+    return (
+      <div className="py-4 text-center text-[12px] text-slate-500">
+        No risk breakdown provided by API.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2.5">
-      {riskContributors.map((c, i) => (
+      {contributors.map((c, i) => (
         <div key={c.label}>
           <div className="mb-1 flex items-center justify-between text-[11.5px]">
             <span className="font-medium text-slate-300">{c.label}</span>

@@ -5,9 +5,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AuthShell } from '../components/auth/AuthShell';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
-import { authRoles } from '../data/mock';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const AUTH_ROLES = [
+  'Field Investigator',
+  'Lead Analyst',
+  'Regional Director',
+  'System Administrator',
+] as const;
 
 export default function Register() {
   const { signUp } = useAuth();
@@ -19,7 +25,7 @@ export default function Register() {
     password: '',
     confirmPassword: '',
     organization: '',
-    role: authRoles[0],
+    role: AUTH_ROLES[0] as string,
   });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -218,7 +224,7 @@ export default function Register() {
                   onChange={set('role')}
                   className="glass-input w-full rounded-xl px-3.5 py-3 text-[13.5px] text-slate-100 outline-none [&>option]:bg-night-900"
                 >
-                  {authRoles.map((r) => (
+                  {AUTH_ROLES.map((r) => (
                     <option key={r} value={r}>
                       {r}
                     </option>
