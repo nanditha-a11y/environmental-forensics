@@ -11,13 +11,13 @@ import Placeholder from './pages/Placeholder';
 import Register from './pages/Register';
 import EvidenceVaultPage from './pages/EvidenceVaultPage';
 import DataSourcesPage from './pages/DataSourcesPage';
+import AlertsCenterPage from './pages/AlertsCenterPage';
+import IncidentsPage from './pages/IncidentsPage';
 import { socket } from './lib/socket';
 
-// Static route definitions replacing placeholderModules mock array
+// Static placeholder routes for modules remaining in development
 const MODULE_ROUTES = [
-  { path: '/incidents', key: 'incidents' },
   { path: '/spatial', key: 'spatial' },
-  { path: '/alerts', key: 'alerts' },
   { path: '/reports', key: 'reports' },
   { path: '/settings', key: 'settings' },
 ];
@@ -91,6 +91,15 @@ function AnimatedRoutes() {
         />
 
         <Route
+          path="/incidents"
+          element={
+            <RequireAuth>
+              <Page><IncidentsPage /></Page>
+            </RequireAuth>
+          }
+        />
+
+        <Route
           path="/evidence"
           element={
             <RequireAuth>
@@ -113,6 +122,15 @@ function AnimatedRoutes() {
           element={
             <RequireAuth>
               <Page><DataSourcesPage /></Page>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/alerts"
+          element={
+            <RequireAuth>
+              <Page><AlertsCenterPage /></Page>
             </RequireAuth>
           }
         />

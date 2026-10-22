@@ -8,6 +8,7 @@ import evidenceRoutes from './routes/evidenceRoutes';
 import osintRoutes from './routes/osintRoutes';
 import { authenticateJWT, authorizeRoles, AuthenticatedRequest } from './middleware/authMiddleware';
 import { initSocket, emitRealtimeEvent } from './socket';
+import { startThreatDetector } from './workers/threatDetector';
 
 dotenv.config();
 
@@ -193,7 +194,6 @@ app.get('/api/incidents/radius', async (req: AuthenticatedRequest, res: Response
   }
 });
 
-// Single Incident Detail (GeoJSON, Evidence, OSINT Logs, Audit History)
 app.get('/api/incidents/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id } = req.params;
 
@@ -302,7 +302,6 @@ app.post('/api/incidents', authenticateJWT, authorizeRoles('admin', 'investigato
   }
 });
 
-// Enhanced Incident Update (Status, Severity, Title, and GeoJSON Polygon/Point Geometry)
 app.patch('/api/incidents/:id', authenticateJWT, authorizeRoles('admin', 'investigator'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id } = req.params;
   const { severity, status, title, polygon_coordinates, latitude, longitude } = req.body;
@@ -391,40 +390,7 @@ app.get('/api/cctv', async (req: AuthenticatedRequest, res: Response): Promise<v
 
     res.json({ status: 'success', count: result.rowCount, data: geojson });
   } catch (error: any) {
-    // Fallback response with live mock feeds if table not yet initialized
-    res.json({
-      status: 'success',
-      count: 2,
-      data: {
-        type: 'FeatureCollection',
-        features: [
-          {
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: [77.5946, 12.9716] },
-            properties: {
-              id: 'cctv-001',
-              camera_name: 'CAM-01 Industrial Outfall',
-              stream_url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-              location_name: 'Zone 4 River Outfall',
-              status: 'LIVE',
-              created_at: new Date().toISOString(),
-            },
-          },
-          {
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: [77.6012, 12.9782] },
-            properties: {
-              id: 'cctv-002',
-              camera_name: 'CAM-02 Basin Perimeter North',
-              stream_url: 'https://playertest.longtailvideo.com/adaptive/oceans/oceans.m3u8',
-              location_name: 'North Retention Basin',
-              status: 'LIVE',
-              created_at: new Date().toISOString(),
-            },
-          },
-        ],
-      },
-    });
+    res.status(500).json({ status: 'error', message: error.message });
   }
 });
 
@@ -486,12 +452,17 @@ app.post('/api/cctv', authenticateJWT, authorizeRoles('admin', 'investigator'), 
 });
 
 // -----------------------------------------------------------------------------
-// ALERTS CRUD ROUTES (GET, POST, PATCH)
+// ALERTS CRUD & MANAGEMENT ENDPOINTS
 // -----------------------------------------------------------------------------
 
 app.get('/api/alerts', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const query = `SELECT * FROM alerts ORDER BY triggered_at DESC;`;
+    const query = `
+      SELECT id, title, description, source, site_id, incident_id, alert_type, 
+             severity, is_read, is_resolved, dedup_key, triggered_at
+      FROM alerts 
+      ORDER BY triggered_at DESC;
+    `;
     const result = await pool.query(query);
     res.json({ status: 'success', count: result.rowCount, data: result.rows });
   } catch (error: any) {
@@ -500,15 +471,26 @@ app.get('/api/alerts', async (req: AuthenticatedRequest, res: Response): Promise
 });
 
 app.post('/api/alerts', authenticateJWT, authorizeRoles('admin', 'investigator', 'analyst'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const { site_id, alert_type, severity } = req.body;
+  const { title, description, source, site_id, incident_id, alert_type, severity, dedup_key } = req.body;
 
   try {
     const query = `
-      INSERT INTO alerts (site_id, alert_type, severity)
-      VALUES ($1, $2, $3)
+      INSERT INTO alerts (title, description, source, site_id, incident_id, alert_type, severity, dedup_key)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *;
     `;
-    const result = await pool.query(query, [site_id, alert_type, severity || 'warning']);
+    const values = [
+      title || 'System Threat Detected',
+      description || 'Automated sensor or spatial threshold breach recorded.',
+      source || 'Automated Detector',
+      site_id || null,
+      incident_id || null,
+      alert_type || 'THRESHOLD_BREACH',
+      severity || 'warning',
+      dedup_key || null,
+    ];
+
+    const result = await pool.query(query, values);
     const newAlert = result.rows[0];
 
     // Emit Realtime Event
@@ -520,9 +502,48 @@ app.post('/api/alerts', authenticateJWT, authorizeRoles('admin', 'investigator',
   }
 });
 
+app.patch('/api/alerts/read-all', authenticateJWT, authorizeRoles('admin', 'investigator', 'analyst'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const query = `
+      UPDATE alerts
+      SET is_read = TRUE
+      WHERE is_read = FALSE
+      RETURNING id;
+    `;
+    const result = await pool.query(query);
+    res.json({ status: 'success', updatedCount: result.rowCount });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+app.patch('/api/alerts/:id/read', authenticateJWT, authorizeRoles('admin', 'investigator', 'analyst'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const { is_read = true } = req.body;
+
+  try {
+    const query = `
+      UPDATE alerts
+      SET is_read = $1
+      WHERE id = $2
+      RETURNING *;
+    `;
+    const result = await pool.query(query, [is_read, id]);
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ status: 'error', message: 'Alert not found.' });
+      return;
+    }
+
+    res.json({ status: 'success', data: result.rows[0] });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 app.patch('/api/alerts/:id', authenticateJWT, authorizeRoles('admin', 'investigator'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id } = req.params;
-  const { is_resolved } = req.body;
+  const { is_resolved = true } = req.body;
 
   try {
     const query = `
@@ -532,7 +553,7 @@ app.patch('/api/alerts/:id', authenticateJWT, authorizeRoles('admin', 'investiga
       RETURNING *;
     `;
 
-    const result = await pool.query(query, [is_resolved !== undefined ? is_resolved : true, id]);
+    const result = await pool.query(query, [is_resolved, id]);
 
     if (result.rows.length === 0) {
       res.status(404).json({ status: 'error', message: 'Alert not found.' });
@@ -568,4 +589,5 @@ app.post('/api/evidence/audit', authenticateJWT, authorizeRoles('admin', 'invest
 
 httpServer.listen(PORT, () => {
   console.log(`EFIF Backend active on port ${PORT} with Socket.IO enabled`);
+  startThreatDetector(30000);
 });

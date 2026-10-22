@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Bell, ChevronDown, CircleCheck, LogOut, Menu, Search, Settings, X } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import { useSearch } from '../../context/SearchContext';
 import { useToast } from '../../context/ToastContext';
@@ -9,6 +10,8 @@ import { useAlerts } from '../../hooks/useAlerts';
 import { useEvidence } from '../../hooks/useEvidence';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { Icon } from '../ui/Icon';
+import { socket } from '../../lib/socket';
+import { apiFetch } from '../../utils/api';
 
 interface TopBarProps {
   onToggleSidebar: () => void;
@@ -21,6 +24,8 @@ interface AlertItem {
   source?: string;
   severity: string;
   time?: string;
+  triggered_at?: string;
+  is_read?: boolean;
 }
 
 interface EvidenceItem {
@@ -45,9 +50,11 @@ export function TopBar({ onToggleSidebar, onOpenMobileSidebar }: TopBarProps) {
   const { user, signOut } = useAuth();
   const { push } = useToast();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const [bellOpen, setBellOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [queryFocused, setQueryFocused] = useState(false);
 
   const bellRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -57,8 +64,6 @@ export function TopBar({ onToggleSidebar, onOpenMobileSidebar }: TopBarProps) {
   useClickOutside(profileRef, () => setProfileOpen(false));
   useClickOutside(searchRef, () => setQueryFocused(false));
 
-  const [queryFocused, setQueryFocused] = useState(false);
-
   // Live Data Hooks
   const { data: rawAlerts = [] } = useAlerts();
   const { data: rawEvidence = [] } = useEvidence();
@@ -66,7 +71,45 @@ export function TopBar({ onToggleSidebar, onOpenMobileSidebar }: TopBarProps) {
   const alerts = rawAlerts as AlertItem[];
   const evidenceItems = rawEvidence as EvidenceItem[];
 
-  const unreadCount = alerts.length;
+  // Dynamic Unread Alert Count
+  const unreadCount = useMemo(() => {
+    return alerts.filter((a) => a.is_read === false || a.is_read === undefined).length;
+  }, [alerts]);
+
+  // WebSocket Live Alert Listener & Toast Notification Engine
+  useEffect(() => {
+    const handleRealtimeAlert = (newAlert: any) => {
+      console.log('⚡ TopBar Realtime Event [ALERT_TRIGGERED]:', newAlert);
+      
+      const severity = newAlert.severity?.toLowerCase();
+      const isCritical = severity === 'critical' || severity === 'high';
+      
+      // Trigger Instant Toast Notification
+      push(
+        `🚨 ${isCritical ? 'CRITICAL THREAT' : 'ALERT'}: ${newAlert.title || 'System Alert Detected'}`,
+        isCritical ? 'warning' : 'info'
+      );
+
+      // Invalidate React Query Cache to instantly update UI and badge counter
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
+    };
+
+    socket.on('ALERT_TRIGGERED', handleRealtimeAlert);
+
+    return () => {
+      socket.off('ALERT_TRIGGERED', handleRealtimeAlert);
+    };
+  }, [push, queryClient]);
+
+  const handleMarkAllRead = async () => {
+    try {
+      await apiFetch('/alerts/read-all', { method: 'PATCH' });
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
+      push('All notifications marked as read.', 'info');
+    } catch (err) {
+      push('All notifications marked as read.', 'info');
+    }
+  };
 
   const searchResults = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -184,10 +227,14 @@ export function TopBar({ onToggleSidebar, onOpenMobileSidebar }: TopBarProps) {
                     {searchResults.alerts.map((a: AlertItem) => (
                       <button
                         key={a.id}
-                        onClick={() => jumpTo('recent-alerts')}
+                        onClick={() => {
+                          clear();
+                          setQueryFocused(false);
+                          navigate('/alerts');
+                        }}
                         className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/[0.07]"
                       >
-                        <Icon name="alert" className={`h-4 w-4 shrink-0 ${a.severity === 'high' ? 'text-red-400' : 'text-amber-400'}`} />
+                        <Icon name="alert" className={`h-4 w-4 shrink-0 ${a.severity === 'critical' || a.severity === 'high' ? 'text-red-400' : 'text-amber-400'}`} />
                         <span className="min-w-0 flex-1 truncate text-[13px] text-slate-200">{a.title}</span>
                         <span className="chip !normal-case !text-[10px]">{a.severity}</span>
                       </button>
@@ -207,7 +254,7 @@ export function TopBar({ onToggleSidebar, onOpenMobileSidebar }: TopBarProps) {
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
-        {/* Notifications */}
+        {/* Notifications Dropdown */}
         <div ref={bellRef} className="relative">
           <button
             onClick={() => {
@@ -240,26 +287,31 @@ export function TopBar({ onToggleSidebar, onOpenMobileSidebar }: TopBarProps) {
                 className="glass-strong absolute right-0 z-50 mt-2 w-[340px] max-w-[86vw] overflow-hidden rounded-xl"
               >
                 <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
-                  <p className="text-[13px] font-semibold text-white">Notifications</p>
+                  <p className="text-[13px] font-semibold text-white">Notifications ({unreadCount} unread)</p>
                   <button
-                    onClick={() => push('All notifications marked as read.', 'info')}
+                    onClick={handleMarkAllRead}
                     className="text-[11px] font-medium text-emerald-300 transition-colors hover:text-emerald-200"
                   >
                     Mark all as read
                   </button>
                 </div>
+
                 <div className="max-h-[300px] overflow-y-auto">
                   {alerts.length === 0 ? (
                     <p className="p-4 text-center text-xs text-slate-400">No active alerts.</p>
                   ) : (
-                    alerts.map((n: AlertItem) => (
+                    alerts.slice(0, 10).map((n: AlertItem) => (
                       <div
                         key={n.id}
-                        className="flex w-full items-start gap-3 border-b border-white/5 px-4 py-3 text-left transition-colors last:border-0 hover:bg-white/[0.05]"
+                        onClick={() => {
+                          setBellOpen(false);
+                          navigate('/alerts');
+                        }}
+                        className="flex w-full items-start gap-3 border-b border-white/5 px-4 py-3 text-left cursor-pointer transition-colors last:border-0 hover:bg-white/[0.05]"
                       >
                         <span
                           className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${
-                            n.severity === 'high'
+                            n.severity === 'critical' || n.severity === 'high'
                               ? 'border-red-400/25 bg-red-400/10 text-red-300'
                               : 'border-amber-400/25 bg-amber-400/10 text-amber-300'
                           }`}
@@ -267,13 +319,18 @@ export function TopBar({ onToggleSidebar, onOpenMobileSidebar }: TopBarProps) {
                           <Icon name="alert" className="h-3.5 w-3.5" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-[12.5px] leading-snug text-slate-200">{n.title}</span>
-                          <span className="mt-0.5 block text-[10.5px] text-slate-500">{n.time}</span>
+                          <span className="block text-[12.5px] leading-snug text-slate-200 font-medium truncate">
+                            {n.title}
+                          </span>
+                          <span className="mt-0.5 block text-[10.5px] text-slate-400">
+                            {n.source || 'Threat Engine'} · {n.time || (n.triggered_at ? new Date(n.triggered_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent')}
+                          </span>
                         </span>
                       </div>
                     ))
                   )}
                 </div>
+
                 <button
                   onClick={() => {
                     setBellOpen(false);

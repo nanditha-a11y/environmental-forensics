@@ -42,16 +42,16 @@ router.post('/upload-url', async (req: Request, res: Response): Promise<void> =>
 
   // 1. Validate File MIME Type
   if (!ALLOWED_MIME_TYPES.has(fileType)) {
-    res.status(400).json({ 
-      message: `Invalid file type (${fileType}). Allowed types: Images, PDFs, CSV, JSON, Videos, Audio, and Lab Binaries.` 
+    res.status(400).json({
+      message: `Invalid file type (${fileType}). Allowed types: Images, PDFs, CSV, JSON, Videos, Audio, and Lab Binaries.`,
     });
     return;
   }
 
   // 2. Validate File Size
   if (fileSize && fileSize > MAX_FILE_SIZE) {
-    res.status(400).json({ 
-      message: 'File size exceeds maximum allowed limit of 100 MB.' 
+    res.status(400).json({
+      message: 'File size exceeds maximum allowed limit of 100 MB.',
     });
     return;
   }
@@ -143,7 +143,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// GET /api/evidence
+// GET /api/evidence - Fetch all evidence records
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const query = `
@@ -174,7 +174,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// GET /api/evidence/nearby
+// GET /api/evidence/nearby - Fetch evidence around a geo coordinate
 router.get('/nearby', async (req: Request, res: Response): Promise<void> => {
   const { lat, lng } = req.query;
 
@@ -314,7 +314,7 @@ router.get('/:id/audit-logs', async (req: Request, res: Response): Promise<void>
       SELECT 
         id,
         evidence_id,
-        event_type AS action,
+        COALESCE(action_performed, event_type) AS action,
         performed_by,
         details,
         ip_address,

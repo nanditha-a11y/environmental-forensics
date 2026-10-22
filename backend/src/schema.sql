@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS forensic_samples (
 CREATE TABLE IF NOT EXISTS evidence (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     incident_id UUID REFERENCES incidents(id) ON DELETE CASCADE,
+    evidence_tag VARCHAR(100),
     title VARCHAR(255) NOT NULL,
     kind VARCHAR(100) NOT NULL, -- 'Drone Imagery', 'Water Sample', 'eDNA', 'Chemical', 'GIS Layer'
     status VARCHAR(50) DEFAULT 'verified',
@@ -82,17 +83,29 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 
 -- ==========================================
--- 4. ALERTS & TELEMETRY
+-- 4. ALERTS & TELEMETRY (UPGRADED)
 -- ==========================================
 CREATE TABLE IF NOT EXISTS alerts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title VARCHAR(255) NOT NULL DEFAULT 'System Alert',
+    description TEXT,
+    source VARCHAR(255) DEFAULT 'Threat Detector Engine',
     site_id UUID REFERENCES monitoring_sites(id) ON DELETE SET NULL,
     incident_id UUID REFERENCES incidents(id) ON DELETE SET NULL,
     alert_type VARCHAR(100) NOT NULL,
-    severity VARCHAR(50) DEFAULT 'warning', -- 'info', 'warning', 'high', 'critical'
+    severity VARCHAR(50) DEFAULT 'warning', -- 'low', 'medium', 'high', 'critical', 'warning'
+    is_read BOOLEAN DEFAULT FALSE,
     is_resolved BOOLEAN DEFAULT FALSE,
+    dedup_key VARCHAR(255),
     triggered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Idempotent Column Additions for Existing Tables
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS title VARCHAR(255) NOT NULL DEFAULT 'System Alert';
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS source VARCHAR(255) DEFAULT 'Threat Detector Engine';
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS dedup_key VARCHAR(255);
 
 -- ==========================================
 -- 5. OSINT & SURVEILLANCE MODULE (OSIRIS EXTENSIONS)
@@ -137,12 +150,11 @@ CREATE TABLE IF NOT EXISTS osint_tracking_logs (
 -- ==========================================
 -- INDEXES & PERFORMANCE OPTIMIZATIONS
 -- ==========================================
--- Cryptographic integrity index
 CREATE INDEX IF NOT EXISTS idx_evidence_file_hash ON evidence(file_hash);
-
--- PostGIS Spatial GIST Indexes for rapid radius/polygon query performance
 CREATE INDEX IF NOT EXISTS idx_incidents_location ON incidents USING GIST (location);
 CREATE INDEX IF NOT EXISTS idx_incidents_affected_area ON incidents USING GIST (affected_area);
 CREATE INDEX IF NOT EXISTS idx_monitoring_sites_location ON monitoring_sites USING GIST (location);
 CREATE INDEX IF NOT EXISTS idx_cctv_feeds_location ON cctv_feeds USING GIST (location);
 CREATE INDEX IF NOT EXISTS idx_osint_tracking_coordinates ON osint_tracking_logs USING GIST (coordinates);
+CREATE INDEX IF NOT EXISTS idx_alerts_triggered_at ON alerts(triggered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_alerts_dedup_key ON alerts(dedup_key);
