@@ -11,3 +11,8 @@ export const pool = new Pool({
     rejectUnauthorized: false,
   },
 });
+
+// Debug log to verify database connection host & database name
+pool.query('SELECT current_database(), current_user, inet_server_addr();')
+  .then((res) => console.log('CONNECTED TO DB:', res.rows[0]))
+  .catch((err) => console.error('DB CONNECTION ERROR:', err));

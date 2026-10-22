@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Page } from './components/ui/Page';
 import { useAuth } from './context/AuthContext';
 import { Icon } from './components/ui/Icon';
@@ -7,12 +9,14 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Placeholder from './pages/Placeholder';
 import Register from './pages/Register';
+import EvidenceVaultPage from './pages/EvidenceVaultPage';
+import DataSourcesPage from './pages/DataSourcesPage';
+import { socket } from './lib/socket';
 
 // Static route definitions replacing placeholderModules mock array
 const MODULE_ROUTES = [
   { path: '/incidents', key: 'incidents' },
   { path: '/spatial', key: 'spatial' },
-  { path: '/evidence', key: 'evidence' },
   { path: '/alerts', key: 'alerts' },
   { path: '/reports', key: 'reports' },
   { path: '/settings', key: 'settings' },
@@ -45,6 +49,31 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 function AnimatedRoutes() {
   const location = useLocation();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    // Socket.IO Realtime Listeners
+    socket.on('EVIDENCE_HASHED', (data) => {
+      console.log('⚡ Realtime Event Received [EVIDENCE_HASHED]:', data);
+      queryClient.invalidateQueries({ queryKey: ['evidence'] });
+    });
+
+    socket.on('INCIDENT_CREATED', (data) => {
+      console.log('⚡ Realtime Event Received [INCIDENT_CREATED]:', data);
+      queryClient.invalidateQueries({ queryKey: ['incidents'] });
+    });
+
+    socket.on('ALERT_TRIGGERED', (data) => {
+      console.log('⚡ Realtime Event Received [ALERT_TRIGGERED]:', data);
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
+    });
+
+    return () => {
+      socket.off('EVIDENCE_HASHED');
+      socket.off('INCIDENT_CREATED');
+      socket.off('ALERT_TRIGGERED');
+    };
+  }, [queryClient]);
 
   return (
     <AnimatePresence mode="wait" initial={false}>
@@ -57,6 +86,33 @@ function AnimatedRoutes() {
           element={
             <RequireAuth>
               <Page><Dashboard /></Page>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/evidence"
+          element={
+            <RequireAuth>
+              <Page><EvidenceVaultPage /></Page>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/sources"
+          element={
+            <RequireAuth>
+              <Page><DataSourcesPage /></Page>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/data-sources"
+          element={
+            <RequireAuth>
+              <Page><DataSourcesPage /></Page>
             </RequireAuth>
           }
         />

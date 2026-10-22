@@ -53,12 +53,13 @@ export function EvidenceSummary() {
   const [selected, setSelected] = useState<EvidenceItem | null>(null);
   const [open, setOpen] = useState(false);
 
-  // Live Backend Fetching via TanStack Query
-  const { data: apiEvidence = [], isLoading, isError, error } = useEvidence();
+  // Explicitly type raw evidence list as EvidenceItem[]
+  const { data: rawEvidence = [], isLoading, isError, error } = useEvidence();
+  const apiEvidence = rawEvidence as EvidenceItem[];
 
   const q = query.trim().toLowerCase();
   const filtered = q
-    ? apiEvidence.filter((e) =>
+    ? apiEvidence.filter((e: EvidenceItem) =>
         `${e.title || ''} ${e.metaValue || ''} ${e.status || ''}`.toLowerCase().includes(q)
       )
     : apiEvidence;
@@ -92,7 +93,7 @@ export function EvidenceSummary() {
         ) : (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
             <AnimatePresence mode="popLayout">
-              {filtered.map((item, i) => (
+              {filtered.map((item: EvidenceItem, i: number) => (
                 <EvidenceCard key={item.id} item={item} index={i} onOpen={() => openItem(item)} />
               ))}
             </AnimatePresence>

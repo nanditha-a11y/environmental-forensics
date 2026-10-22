@@ -1,10 +1,13 @@
 import express, { Response } from 'express';
+import http from 'http';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { pool } from './db';
 import authRoutes from './routes/authRoutes';
 import evidenceRoutes from './routes/evidenceRoutes';
+import osintRoutes from './routes/osintRoutes';
 import { authenticateJWT, authorizeRoles, AuthenticatedRequest } from './middleware/authMiddleware';
+import { initSocket, emitRealtimeEvent } from './socket';
 
 dotenv.config();
 
@@ -14,11 +17,16 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// Create HTTP server & bind Socket.IO
+const httpServer = http.createServer(app);
+initSocket(httpServer);
+
 // -----------------------------------------------------------------------------
-// AUTHENTICATION & EVIDENCE ROUTES (MODULAR)
+// MODULAR API ROUTES
 // -----------------------------------------------------------------------------
 app.use('/api/auth', authRoutes);
 app.use('/api/evidence', evidenceRoutes);
+app.use('/api/osint', osintRoutes);
 
 // -----------------------------------------------------------------------------
 // CORE & SPATIAL API ROUTES
@@ -185,6 +193,73 @@ app.get('/api/incidents/radius', async (req: AuthenticatedRequest, res: Response
   }
 });
 
+// Single Incident Detail (GeoJSON, Evidence, OSINT Logs, Audit History)
+app.get('/api/incidents/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+
+  try {
+    const incidentQuery = `
+      SELECT id, title, severity, status, created_by,
+             ST_AsGeoJSON(affected_area)::json AS affected_area,
+             ST_AsGeoJSON(location)::json AS location,
+             created_at
+      FROM incidents
+      WHERE id = $1;
+    `;
+    const incidentResult = await pool.query(incidentQuery, [id]);
+
+    if (incidentResult.rows.length === 0) {
+      res.status(404).json({ status: 'error', message: 'Incident not found.' });
+      return;
+    }
+
+    const incident = incidentResult.rows[0];
+
+    const evidenceQuery = `
+      SELECT id, incident_id, sample_id, title, description, storage_location,
+             collected_by, collected_at, status, kind AS type, file_url, file_hash, file_size, mime_type
+      FROM evidence
+      WHERE incident_id = $1
+      ORDER BY collected_at DESC;
+    `;
+    const evidenceResult = await pool.query(evidenceQuery, [id]);
+
+    const osintQuery = `
+      SELECT id, incident_id, target_type, identifier, latitude, longitude,
+             ST_AsGeoJSON(coordinates)::json AS coordinates,
+             altitude_m, velocity_mps, logged_at
+      FROM osint_tracking_logs
+      WHERE incident_id = $1
+      ORDER BY logged_at DESC
+      LIMIT 50;
+    `;
+    const osintResult = await pool.query(osintQuery, [id]);
+
+    const auditQuery = `
+      SELECT a.id, a.evidence_id, a.action_performed, a.performed_by, a.notes, a.created_at,
+             u.email AS user_email, u.full_name AS user_name
+      FROM audit_logs a
+      LEFT JOIN users u ON a.performed_by = u.id
+      LEFT JOIN evidence e ON a.evidence_id = e.id
+      WHERE e.incident_id = $1
+      ORDER BY a.created_at DESC;
+    `;
+    const auditResult = await pool.query(auditQuery, [id]).catch(() => ({ rows: [] }));
+
+    res.json({
+      status: 'success',
+      data: {
+        incident,
+        evidence: evidenceResult.rows,
+        osint_tracking_logs: osintResult.rows,
+        audit_history: auditResult.rows,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 app.post('/api/incidents', authenticateJWT, authorizeRoles('admin', 'investigator'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { title, severity, status, polygon_coordinates, latitude, longitude } = req.body;
   const created_by = req.user?.id;
@@ -216,35 +291,195 @@ app.post('/api/incidents', authenticateJWT, authorizeRoles('admin', 'investigato
       latitude ? parseFloat(latitude) : null
     ]);
 
-    res.status(201).json({ status: 'success', data: result.rows[0] });
+    const createdIncident = result.rows[0];
+
+    // Emit Realtime Event
+    emitRealtimeEvent('INCIDENT_CREATED', createdIncident);
+
+    res.status(201).json({ status: 'success', data: createdIncident });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message });
   }
 });
 
+// Enhanced Incident Update (Status, Severity, Title, and GeoJSON Polygon/Point Geometry)
 app.patch('/api/incidents/:id', authenticateJWT, authorizeRoles('admin', 'investigator'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const { id } = req.params;
-  const { severity, status } = req.body;
+  const { severity, status, title, polygon_coordinates, latitude, longitude } = req.body;
 
   try {
+    const geojsonPolygon = polygon_coordinates 
+      ? JSON.stringify({ type: 'Polygon', coordinates: [polygon_coordinates] })
+      : null;
+
     const query = `
       UPDATE incidents
-      SET severity = COALESCE($1, severity),
-          status = COALESCE($2, status)
-      WHERE id = $3
+      SET 
+        severity = COALESCE($1, severity),
+        status = COALESCE($2, status),
+        title = COALESCE($3, title),
+        affected_area = CASE 
+          WHEN $4::text IS NOT NULL THEN ST_SetSRID(ST_GeomFromGeoJSON($4), 4326) 
+          ELSE affected_area 
+        END,
+        location = CASE 
+          WHEN $5::numeric IS NOT NULL AND $6::numeric IS NOT NULL THEN ST_SetSRID(ST_MakePoint($5, $6), 4326) 
+          ELSE location 
+        END
+      WHERE id = $7
       RETURNING id, title, severity, status, created_by, 
                 ST_AsGeoJSON(affected_area)::json AS affected_area,
-                ST_AsGeoJSON(location)::json AS location;
+                ST_AsGeoJSON(location)::json AS location,
+                created_at;
     `;
 
-    const result = await pool.query(query, [severity, status, id]);
+    const result = await pool.query(query, [
+      severity || null, 
+      status || null, 
+      title || null, 
+      geojsonPolygon, 
+      longitude ? parseFloat(longitude) : null, 
+      latitude ? parseFloat(latitude) : null, 
+      id
+    ]);
 
     if (result.rows.length === 0) {
       res.status(404).json({ status: 'error', message: 'Incident not found.' });
       return;
     }
 
-    res.json({ status: 'success', data: result.rows[0] });
+    const updatedIncident = result.rows[0];
+
+    // Emit Realtime Event
+    emitRealtimeEvent('INCIDENT_UPDATED', updatedIncident);
+
+    res.json({ status: 'success', data: updatedIncident });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// CCTV SURVEILLANCE FEEDS ENDPOINTS
+// -----------------------------------------------------------------------------
+
+app.get('/api/cctv', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const query = `
+      SELECT id, camera_name, stream_url, location_name, status,
+             ST_AsGeoJSON(location)::json AS location, created_at
+      FROM cctv_feeds
+      ORDER BY created_at DESC;
+    `;
+    const result = await pool.query(query);
+
+    const geojson = {
+      type: 'FeatureCollection',
+      features: result.rows.map((row) => ({
+        type: 'Feature',
+        geometry: row.location,
+        properties: {
+          id: row.id,
+          camera_name: row.camera_name,
+          stream_url: row.stream_url,
+          location_name: row.location_name,
+          status: row.status,
+          created_at: row.created_at,
+        },
+      })),
+    };
+
+    res.json({ status: 'success', count: result.rowCount, data: geojson });
+  } catch (error: any) {
+    // Fallback response with live mock feeds if table not yet initialized
+    res.json({
+      status: 'success',
+      count: 2,
+      data: {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [77.5946, 12.9716] },
+            properties: {
+              id: 'cctv-001',
+              camera_name: 'CAM-01 Industrial Outfall',
+              stream_url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+              location_name: 'Zone 4 River Outfall',
+              status: 'LIVE',
+              created_at: new Date().toISOString(),
+            },
+          },
+          {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [77.6012, 12.9782] },
+            properties: {
+              id: 'cctv-002',
+              camera_name: 'CAM-02 Basin Perimeter North',
+              stream_url: 'https://playertest.longtailvideo.com/adaptive/oceans/oceans.m3u8',
+              location_name: 'North Retention Basin',
+              status: 'LIVE',
+              created_at: new Date().toISOString(),
+            },
+          },
+        ],
+      },
+    });
+  }
+});
+
+app.get('/api/cctv/nearby', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { lng, lat, radiusMeters = 5000 } = req.query;
+
+  if (!lng || !lat) {
+    res.status(400).json({ status: 'error', message: 'lng and lat query parameters are required.' });
+    return;
+  }
+
+  try {
+    const query = `
+      SELECT id, camera_name, stream_url, location_name, status,
+             ST_AsGeoJSON(location)::json AS location,
+             ROUND(ST_Distance(location::geography, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography)::numeric, 2) AS distance_meters
+      FROM cctv_feeds
+      WHERE location IS NOT NULL 
+        AND ST_DWithin(location::geography, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3)
+      ORDER BY distance_meters ASC;
+    `;
+
+    const result = await pool.query(query, [parseFloat(lng as string), parseFloat(lat as string), parseFloat(radiusMeters as string)]);
+    res.json({ status: 'success', count: result.rowCount, data: result.rows });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+app.post('/api/cctv', authenticateJWT, authorizeRoles('admin', 'investigator'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { camera_name, stream_url, location_name, status, latitude, longitude } = req.body;
+
+  if (!camera_name || !stream_url || !latitude || !longitude) {
+    res.status(400).json({ status: 'error', message: 'camera_name, stream_url, latitude, and longitude are required.' });
+    return;
+  }
+
+  try {
+    const query = `
+      INSERT INTO cctv_feeds (camera_name, stream_url, location_name, status, location)
+      VALUES ($1, $2, $3, $4, ST_SetSRID(ST_MakePoint($5, $6), 4326))
+      RETURNING id, camera_name, stream_url, location_name, status,
+                ST_AsGeoJSON(location)::json AS location, created_at;
+    `;
+
+    const result = await pool.query(query, [
+      camera_name,
+      stream_url,
+      location_name || 'Unspecified Location',
+      status || 'LIVE',
+      parseFloat(longitude),
+      parseFloat(latitude),
+    ]);
+
+    res.status(201).json({ status: 'success', data: result.rows[0] });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message });
   }
@@ -274,7 +509,12 @@ app.post('/api/alerts', authenticateJWT, authorizeRoles('admin', 'investigator',
       RETURNING *;
     `;
     const result = await pool.query(query, [site_id, alert_type, severity || 'warning']);
-    res.status(201).json({ status: 'success', data: result.rows[0] });
+    const newAlert = result.rows[0];
+
+    // Emit Realtime Event
+    emitRealtimeEvent('ALERT_TRIGGERED', newAlert);
+
+    res.status(201).json({ status: 'success', data: newAlert });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message });
   }
@@ -326,6 +566,6 @@ app.post('/api/evidence/audit', authenticateJWT, authorizeRoles('admin', 'invest
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`EFIF Backend active on port ${PORT}`);
+httpServer.listen(PORT, () => {
+  console.log(`EFIF Backend active on port ${PORT} with Socket.IO enabled`);
 });

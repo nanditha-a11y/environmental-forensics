@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-type Tone = 'emerald' | 'amber' | 'red' | 'sky' | 'violet' | 'cyan' | 'slate';
+type Tone = 'emerald' | 'amber' | 'red' | 'sky' | 'violet' | 'cyan' | 'slate' | 'rose';
 
 const tones: Record<Tone, string> = {
   emerald: 'bg-emerald-400/12 text-emerald-300 border-emerald-400/25',
@@ -10,6 +10,7 @@ const tones: Record<Tone, string> = {
   violet: 'bg-violet-400/12 text-violet-300 border-violet-400/25',
   cyan: 'bg-cyan-400/12 text-cyan-300 border-cyan-400/25',
   slate: 'bg-slate-400/10 text-slate-300 border-slate-400/20',
+  rose: 'bg-rose-400/12 text-rose-300 border-rose-400/30',
 };
 
 interface BadgeProps {
